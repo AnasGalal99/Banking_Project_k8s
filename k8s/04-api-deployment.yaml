@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: banking-api
+  namespace: banking
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: banking-api
+  template:
+    metadata:
+      labels:
+        app: banking-api
+    spec:
+      tolerations:
+      - key: "database-only"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: type
+                operator: In
+                values:
+                - high-memory
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - banking-api
+            topologyKey: "kubernetes.io/hostname"
+
+      initContainers:
+      - name: wait-for-db
+        image: busybox:1.36
+        command:
+        - sh
+        - -c
+        - |
+          until nc -z postgres-db 5432; do
+            echo "waiting for db...";
+            sleep 2;
+          done
+
+      containers:
+      - name: banking-api
+        image: anas2112/banking-api:v1.0
+        ports:
+        - containerPort: 3000
+        envFrom:
+        - configMapRef:
+            name: banking-config
+        - secretRef:
+            name: banking-secret
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "256Mi"
+
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 15
+          
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /ready
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: banking-api-service
+  namespace: banking
+spec:
+  selector:
+    app: banking-api
+  ports:
+  - port: 3000
+    targetPort: 3000

@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: banking-dashboard
+  namespace: banking
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      initContainers:
+      - name: wait-for-api
+        image: busybox:1.36
+        command:
+         - sh
+         - -c
+         - |
+            until nc -z banking-api-service 3000; do
+              echo "waiting for API...";
+              sleep 2;
+            done
+      containers:
+      - name: dashboard
+        image: anas2112/banking-dashboard:v1.0
+        ports:
+        - containerPort: 80
+        imagePullPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: banking-dashboard-service
+  namespace: banking
+spec:
+  selector:
+    app: dashboard
+  ports:
+  - port: 80
