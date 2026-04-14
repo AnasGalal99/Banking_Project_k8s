@@ -164,7 +164,7 @@ This script:
 
 ### 1. Start Minikube 
 ```bash
-minikube start --cpus=4 --memory=8192
+minikube start --nodes=3 --cpus=4 --memory=8192
 ```
 
 ### 2. Setup Nodes
