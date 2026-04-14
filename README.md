@@ -162,7 +162,7 @@ This script:
 
 ## 🚀 How to Run the Project
 
-### 1. Start Minikube
+### 1. Start Minikube 
 ```bash
 minikube start --nodes=3
 ```
