@@ -1,5 +1,7 @@
 #!/bin/bash
 
+minikube start --nodes 3 --cpus 4 --memory 8192 --disk-size 20g --driver=docker
+
 echo "Setting up nodes..."
 
 # Label nodes
