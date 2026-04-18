@@ -1,20 +1,10 @@
 # 🏦 Banking Microservices Project (Kubernetes)
 
 ## 📌 Overview
-This project demonstrates a production-style Kubernetes deployment for a simple banking system composed of:
-- Banking API (Node.js)
-- Dashboard (Nginx)
-- PostgreSQL Database (StatefulSet)
 
-The system is deployed on a multi-node Minikube cluster with advanced Kubernetes concepts including:
-- Node Affinity & Anti-Affinity
-- Taints & Tolerations
-- StatefulSets
-- Horizontal Pod Autoscaler (HPA)
-- Ingress
-- Network Policies
-- RBAC
-- DaemonSets (Fluentd logging)
+This project demonstrates a **production-style Kubernetes deployment** for a banking system running on a **multi-node Minikube cluster**.
+
+It includes real-world concepts like scheduling, networking, security, observability, and troubleshooting.
 
 ---
 
@@ -45,12 +35,13 @@ The system is deployed on a multi-node Minikube cluster with advanced Kubernetes
 
 ## ⚙️ Technologies Used
 
-- Docker
-- Kubernetes (Minikube - Multi-node)
-- Node.js
-- Nginx
-- PostgreSQL
-- Fluentd (Logging)
+* Docker
+* Kubernetes (Minikube - Multi-node cluster)
+* Node.js
+* Nginx
+* PostgreSQL
+* Fluentd (Logging)
+* Metrics Server
 
 ---
 
@@ -75,169 +66,212 @@ k8s/
 
 ---
 
-## 🐳 Docker Images
+## 🧠 Key Kubernetes Concepts
 
-### API
-- Built using Node.js
-- Exposes port 3000
+### 🔹 Scheduling & Nodes
 
-### Dashboard
-- Built using Nginx
-- Serves static frontend
+* Node Labels (`type=high-memory`)
+* Node Affinity & Anti-Affinity
+* Taints & Tolerations (Database isolation)
 
----
+### 🔹 Workloads
 
-## 🧠 Key Kubernetes Concepts Used
+* Deployment (API & Dashboard)
+* StatefulSet (PostgreSQL with persistence)
+* DaemonSet (Fluentd logging)
 
-### 1. Namespace
-Isolates all project resources inside `banking` namespace.
+### 🔹 Networking
 
-### 2. ConfigMap
-Stores environment variables:
-- DB_HOST
-- DB_PORT
-- LOG_LEVEL
+* ClusterIP Services
+* Headless Service (PostgreSQL)
+* Ingress (NGINX Controller)
 
-### 3. Secret
-Stores sensitive data:
-- DB_PASSWORD
-- JWT_SECRET
+### 🔹 Security
 
-### 4. StatefulSet (PostgreSQL)
-- 2 replicas
-- Persistent storage (PVC)
-- Headless service
-- Anti-affinity for High Availability
+* RBAC
+* Secrets management
+* Network Policies (Default Deny)
 
-### 5. Deployment (API)
-- 2 replicas
-- Node Affinity (high-memory nodes)
-- Pod Anti-Affinity (spread pods)
-- Init Container (wait for DB)
-- Liveness & Readiness probes
+### 🔹 Scalability
 
-### 6. Deployment (Dashboard)
-- Waits for API using initContainer
-- Exposed via service and ingress
-
-### 7. Services
-- ClusterIP for internal communication
-- Headless service for PostgreSQL
-
-### 8. Ingress
-- Host: `banking.local`
-- Routes:
-  - `/` → Dashboard
-  - `/api` → API
-
-### 9. HPA (Horizontal Pod Autoscaler)
-- Scales API based on CPU usage
-
-### 10. RBAC
-- Role + RoleBinding for pod read access
-
-### 11. Network Policy
-- Restricts traffic between components
-- Allows only required communication
-
-### 12. DaemonSet (Fluentd)
-- Runs on every node
-- Collects logs
+* Horizontal Pod Autoscaler (HPA)
 
 ---
 
-## 🧩 Node Configuration (IMPORTANT)
+## 🔐 Network Policy Strategy
 
-Run once:
+Implemented a **Zero Trust model**:
 
-```bash
-bash k8s/12-setup-nodes.sh
-```
+* Deny all traffic by default
+* Allow only required communication:
 
-This script:
-- Labels nodes (`type=high-memory`)
-- Adds taint to DB node
+  * Ingress → Dashboard
+  * Ingress → API
+  * Dashboard → API
+  * API → Database
+  * DNS access
 
 ---
 
-## 🚀 How to Run the Project
+## 🌐 Ingress Configuration
 
-### 1. Start Minikube 
+* Host: `banking.local`
+* Routes:
+
+  * `/` → Dashboard
+  * `/api` → Banking API
+
+---
+
+## 🚀 How to Run
+
+### 1. Start Minikube
+
 ```bash
 minikube start --nodes=3 --cpus=4 --memory=8192
 ```
 
 ### 2. Setup Nodes
+
 ```bash
 bash k8s/12-setup-nodes.sh
 ```
 
-### 3. Deploy Everything
+### 3. Deploy
+
 ```bash
 kubectl apply -f k8s/
 ```
 
 ### 4. Enable Ingress
+
 ```bash
 minikube addons enable ingress
 ```
 
-### 5. Access Application
+### 5. Enable Metrics
 
-Add to hosts file:
+```bash
+minikube addons enable metrics-server
+```
+
+### 6. Fix Metrics Server (Minikube)
+
+```bash
+kubectl patch deployment metrics-server -n kube-system \
+--type='json' \
+-p='[{"op":"add","path":"/spec/template/spec/containers/0/args/-","value":"--kubelet-insecure-tls"}]'
+```
+
+### 7. Start Tunnel
+
+```bash
+minikube tunnel
+```
+
+### 8. Access
+
+Add to `/etc/hosts`:
+
 ```
 <minikube-ip> banking.local
 ```
 
-Then open:
+Open:
+
 ```
 http://banking.local
 ```
 
 ---
 
-## 🔍 Debugging Commands
+## 🧪 Testing & Validation
+
+### Check Pods
 
 ```bash
 kubectl get pods -n banking
-kubectl describe pod <pod-name> -n banking
-kubectl logs <pod-name> -n banking
-kubectl get svc -n banking
-kubectl get nodes --show-labels
+```
+
+### Test API
+
+```bash
+kubectl port-forward svc/banking-api-service 3001:3000 -n banking
+curl http://localhost:3001/health
+```
+
+### Test Ingress
+
+```bash
+curl -H "Host: banking.local" http://$(minikube ip)
 ```
 
 ---
 
-## ⚠️ Common Issues & Fixes
+## ⚠️ Real Issues & Solutions
 
-### Pod Pending
-- Cause: Affinity / Taints
-- Fix: Check node labels
+### 🔸 Ingress Not Working
 
-### API CrashLoopBackOff
-- Cause: DB not ready
-- Fix: Init container + correct DB_HOST
+* Cause: Controller scheduling failure due to taints
+* Fix: Adjusted node configuration
 
-### HPA Unknown
-- Cause: Missing metrics-server or CPU requests
-- Fix: Add resources + enable metrics-server
+---
+
+### 🔸 Pods Stuck in Pending
+
+* Cause: Node affinity conflicts
+* Fix: Correct labeling and scheduling rules
+
+---
+
+### 🔸 ImagePullBackOff
+
+* Cause: Network issues inside Minikube
+* Fix:
+
+```bash
+minikube ssh
+docker pull <image>
+```
+
+---
+
+### 🔸 HPA showing `<unknown>`
+
+* Cause: Metrics Server not configured
+* Fix: Enabled and patched metrics-server
+
+---
+
+### 🔸 DNS / Service Resolution Issues
+
+* Cause: Testing from wrong namespace
+* Fix: Used correct namespace or FQDN
+
+---
+
+### 🔸 NetworkPolicy Blocking Traffic
+
+* Cause: Default deny configuration
+* Fix: Designed precise allow rules
 
 ---
 
 ## 🏁 Conclusion
 
-This project demonstrates a complete Kubernetes production-like setup including:
-- Scalable architecture
-- High availability
-- Secure communication
-- Observability
+This project demonstrates:
+
+* Real-world Kubernetes deployment
+* Secure networking (Zero Trust)
+* Scalable microservices architecture
+* Advanced debugging and troubleshooting
 
 ---
 
 ## 👨‍💻 Author
-Anas Galal
+
+**Anas Galal**
 
 ---
 
-🔥 This project represents advanced Kubernetes concepts and real-world deployment practices.
-
+🔥 This project reflects hands-on experience with real Kubernetes challenges and solutions.
